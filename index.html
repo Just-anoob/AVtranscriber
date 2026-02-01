@@ -1,0 +1,1055 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Media Transcriber</title>
+    <style>
+        :root {
+            --bg-color: #0f172a;
+            --text-color: #e2e8f0;
+            --pane-bg: #1e293b;
+            --accent: #38bdf8;
+            --highlight: #0ea5e9;
+            --border: #334155;
+            --hover: #334155;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        /* Header */
+        header {
+            padding: 1rem 2rem;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: var(--pane-bg);
+            flex-shrink: 0;
+        }
+
+        h1 {
+            margin: 0;
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: var(--accent);
+        }
+
+        .controls {
+            display: flex;
+            gap: 1rem;
+            align-items: center;
+        }
+
+        input[type="file"] {
+            display: none;
+        }
+
+        .btn {
+            background: var(--accent);
+            color: #0f172a;
+            padding: 0.5rem 1rem;
+            border-radius: 0.375rem;
+            font-weight: 600;
+            cursor: pointer;
+            border: none;
+            transition: opacity 0.2s;
+            text-decoration: none;
+            font-size: 0.875rem;
+        }
+
+        .btn:hover {
+            opacity: 0.9;
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            filter: grayscale(1);
+        }
+
+        /* Main Config */
+        main {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            height: 100%;
+        }
+
+        /* Top Pane: Media Player */
+        #media-pane {
+            flex: 0 0 auto;
+            max-height: 50vh;
+            padding: 1rem;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background: #000;
+            border-right: none;
+            border-bottom: 1px solid var(--border);
+            position: relative;
+        }
+
+        video,
+        audio {
+            max-width: 100%;
+            max-height: 48vh;
+            border-radius: 0.5rem;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
+        }
+
+        .placeholder-text {
+            color: #64748b;
+            text-align: center;
+        }
+
+        /* Custom Controls */
+        #custom-controls {
+            width: 100%;
+            margin-top: 0.5rem;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            padding: 0.5rem;
+            background: #1e293b;
+            border-radius: 0.5rem;
+            box-sizing: border-box;
+        }
+
+        .control-btn {
+            background: var(--accent);
+            border: none;
+            color: #0f172a;
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: transform 0.1s;
+        }
+
+        .control-btn:active {
+            transform: scale(0.95);
+        }
+
+        .control-btn svg {
+            width: 14px;
+            height: 14px;
+            fill: currentColor;
+        }
+
+        .time-slider {
+            flex: 1;
+            appearance: none;
+            -webkit-appearance: none;
+            background: #334155;
+            height: 4px;
+            border-radius: 2px;
+            cursor: pointer;
+        }
+
+        .time-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 12px;
+            height: 12px;
+            background: var(--accent);
+            border-radius: 50%;
+            cursor: pointer;
+            transition: transform 0.1s;
+        }
+
+        .time-slider::-webkit-slider-thumb:hover {
+            transform: scale(1.2);
+        }
+
+        .time-display {
+            font-family: monospace;
+            font-size: 0.75rem;
+            color: #94a3b8;
+            min-width: 80px;
+            text-align: right;
+        }
+
+        /* Bottom Pane: Transcript */
+        #transcript-pane {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            background: var(--bg-color);
+            width: 100%;
+            min-height: 0;
+            /* Important for nested flex scrolling */
+        }
+
+        .pane-header {
+            padding: 1rem;
+            border-bottom: 1px solid var(--border);
+            font-weight: 600;
+            font-size: 0.875rem;
+            color: #94a3b8;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        #transcript-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 1rem;
+            scroll-behavior: smooth;
+            min-height: 0;
+            position: relative;
+        }
+
+        #resume-btn {
+            position: absolute;
+            bottom: 2rem;
+            right: 2rem;
+            background: var(--accent);
+            color: #fff;
+            padding: 0.5rem 1rem;
+            border-radius: 20px;
+            font-size: 0.875rem;
+            font-weight: 500;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            cursor: pointer;
+            border: none;
+            display: none;
+            z-index: 10;
+            transition: opacity 0.2s;
+        }
+
+        #resume-btn:hover {
+            opacity: 0.9;
+        }
+
+        /* Dictionary Tooltip */
+        #dictionary-tooltip {
+            position: fixed;
+            z-index: 100;
+            background: rgba(30, 41, 59, 0.95);
+            backdrop-filter: blur(8px);
+            border: 1px solid var(--border);
+            padding: 1rem;
+            border-radius: 8px;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
+            max-width: 300px;
+            display: none;
+            color: var(--text-color);
+            line-height: 1.5;
+            font-size: 0.9rem;
+        }
+
+        #dictionary-tooltip h4 {
+            margin: 0 0 0.5rem 0;
+            font-size: 1.1rem;
+            color: var(--accent);
+            text-transform: capitalize;
+        }
+
+        #dictionary-tooltip .phonetic {
+            color: #94a3b8;
+            font-size: 0.8rem;
+            margin-bottom: 0.5rem;
+            display: block;
+        }
+
+        #dictionary-tooltip ul {
+            margin: 0;
+            padding-left: 1.2rem;
+        }
+
+        #dictionary-tooltip li {
+            margin-bottom: 0.25rem;
+        }
+
+        .segment {
+            padding: 0.5rem 0.75rem;
+            margin-bottom: 0.25rem;
+            border-radius: 0.25rem;
+            cursor: pointer;
+            transition: background 0.15s;
+            border-left: 3px solid transparent;
+            display: flex;
+            gap: 1rem;
+        }
+
+        .segment:hover {
+            background: var(--hover);
+        }
+
+        .segment.active {
+            background: rgba(56, 189, 248, 0.1);
+            border-left-color: var(--accent);
+        }
+
+        .timestamp {
+            font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+            color: #64748b;
+            font-size: 0.75rem;
+            min-width: 4.5em;
+            margin-top: 0.2em;
+        }
+
+        .text {
+            line-height: 1.6;
+            color: #cbd5e1;
+        }
+
+        .segment.active .text {
+            color: white;
+        }
+
+        /* Footer / Progress */
+        footer {
+            padding: 0.5rem 1rem;
+            background: var(--pane-bg);
+            border-top: 1px solid var(--border);
+            font-size: 0.75rem;
+            color: #94a3b8;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        #status-bar {
+            display: flex;
+            gap: 1em;
+            align-items: center;
+        }
+
+        .spinner {
+            width: 12px;
+            height: 12px;
+            border: 2px solid var(--accent);
+            border-top-color: transparent;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            display: none;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: var(--bg-color);
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: var(--border);
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #475569;
+        }
+
+        /* Progress Bar */
+        .progress-container {
+            flex: 1;
+            margin: 0 1rem;
+            height: 6px;
+            background: var(--border);
+            border-radius: 3px;
+            overflow: hidden;
+            position: relative;
+            display: none;
+        }
+
+        .progress-bar {
+            height: 100%;
+            background: var(--accent);
+            width: 0%;
+            transition: width 0.2s;
+        }
+
+        .progress-bar.indeterminate {
+            width: 30%;
+            position: absolute;
+            animation: slide 1.5s infinite ease-in-out;
+        }
+
+        @keyframes slide {
+            0% {
+                left: -30%;
+            }
+
+            100% {
+                left: 100%;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+    <header>
+        <h1>AV Transcriber</h1>
+        <div class="controls">
+            <label class="btn" id="file-label" style="cursor: pointer;">
+                Open File
+                <input type="file" id="file-input" accept="*/*" style="display: none;">
+            </label>
+            <span id="filename-display"
+                style="font-size: 0.875rem; color: #94a3b8; max-width: 200px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;"></span>
+            <button id="transcribe-btn" class="btn" disabled>Start Transcription</button>
+        </div>
+    </header>
+
+    <main>
+        <div id="dictionary-tooltip"></div>
+        <div id="media-pane">
+            <div class="placeholder-text" id="placeholder">No media selected</div>
+            <!-- Video/Audio element will be injected here -->
+        </div>
+        <div id="custom-controls" style="display:none;">
+            <button class="control-btn" id="play-btn">
+                <svg viewBox="0 0 24 24">
+                    <path d="M8 5v14l11-7z" />
+                </svg>
+            </button>
+            <input type="range" class="time-slider" id="seek-slider" value="0" min="0" max="100" step="0.1">
+            <div class="time-display" id="time-display">00:00 / 00:00</div>
+        </div>
+
+        <div id="transcript-pane" style="position: relative;">
+            <div class="pane-header">Transcript</div>
+            <div id="transcript-content">
+                <!-- Segments go here -->
+                <div style="padding: 1rem; color: #64748b; font-style: italic;">
+                    Load a file and click "Start Transcription" to begin.
+                </div>
+            </div>
+            <button id="resume-btn">Resume Auto-scroll</button>
+        </div>
+    </main>
+
+    <footer>
+        <div id="status-bar">
+            <div class="spinner" id="spinner"></div>
+            <span id="status-text">Ready</span>
+        </div>
+        <div class="progress-container" id="progress-container">
+            <div class="progress-bar" id="progress-bar"></div>
+        </div>
+        <div id="model-info">Powered by Whisper & transformers.js</div>
+    </footer>
+
+    <script type="module">
+        // -------------------------------------------------------------------------
+        // WORKER CODE (Embedded as Blob)
+        // -------------------------------------------------------------------------
+        // -------------------------------------------------------------------------
+        // WORKER CODE (Embedded as Blob)
+        // -------------------------------------------------------------------------
+        const workerScript = `
+    import { pipeline, env } from 'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2';
+
+    env.allowLocalModels = false;
+    env.useBrowserCache = true;
+    // Try to use all cores
+    env.backends.onnx.wasm.numThreads = navigator.hardwareConcurrency || 4;
+
+    let transcriber = null;
+
+    self.onmessage = async (e) => {
+        const { type, data } = e.data;
+
+        if (type === 'init') {
+            try {
+                self.postMessage({ type: 'status', data: 'Loading model (this may take a while)...' });
+                // Revert to tiny.en for speed, rely on stride for accuracy
+                transcriber = await pipeline('automatic-speech-recognition', 'Xenova/whisper-tiny.en', {
+                    progress_callback: (evt) => {
+                         if (evt.status === 'progress') {
+                             self.postMessage({ 
+                                 type: 'progress', 
+                                 data: { file: evt.file, progress: evt.progress } 
+                             });
+                         }
+                    }
+                });
+                self.postMessage({ type: 'ready' });
+            } catch (err) {
+                self.postMessage({ type: 'error', data: err.message });
+            }
+        }
+
+        if (type === 'transcribe') {
+            if (!transcriber) return;
+            try {
+                self.postMessage({ type: 'status', data: 'Transcribing...' });
+                
+                const audio = data.audio;
+                const sampleRate = 16000;
+                // Process in chunks to give immediate feedback, but with overlap to save words
+                // Process in chunks (60s) with Contextual Overlap to prevent cut words
+                const BATCH_SECONDS = 60; 
+                // Context window: Look back 2s and look ahead 2s to catch boundary words
+                const CONTEXT_LEAD_IN = 2;
+                const CONTEXT_TAIL = 2;
+
+                const BATCH_SAMPLES = BATCH_SECONDS * sampleRate;
+                const LEAD_IN_SAMPLES = CONTEXT_LEAD_IN * sampleRate;
+                const TAIL_SAMPLES = CONTEXT_TAIL * sampleRate;
+                
+                let allChunks = [];
+                let offsetSamples = 0;
+                
+                while (offsetSamples < audio.length) {
+                    const isLast = (offsetSamples + BATCH_SAMPLES) >= audio.length;
+                    
+                    // define the Audio Window: [offset - lead_in, offset + batch + tail]
+                    const windowStartSamples = Math.max(0, offsetSamples - LEAD_IN_SAMPLES);
+                    const windowEndSamples = Math.min(offsetSamples + BATCH_SAMPLES + TAIL_SAMPLES, audio.length);
+                    
+                    const chunkAudio = audio.slice(windowStartSamples, windowEndSamples);
+                    
+                    // Transcribe this window
+                    const output = await transcriber(chunkAudio, {
+                        chunk_length_s: 30, // Internal striding
+                        stride_length_s: 5,
+                        return_timestamps: true
+                    });
+                    
+                    // Process segments
+                    if (output.chunks) {
+                        const timeCorrection = windowStartSamples / sampleRate;
+                        
+                        // Strict Time Window for Ownership: [offset, offset + BATCH)
+                        // A word belongs to this batch ONLY if it starts within the batch's primary window.
+                        const batchStartTime = offsetSamples / sampleRate;
+                        const batchEndTime = (offsetSamples + BATCH_SAMPLES) / sampleRate;
+
+                        output.chunks.forEach(c => {
+                            if (Array.isArray(c.timestamp)) {
+                                const localStart = c.timestamp[0];
+                                const localEnd = c.timestamp[1];
+                                
+                                // Convert to global time
+                                const globalStart = localStart + timeCorrection;
+                                const globalEnd = localEnd + timeCorrection;
+
+                                // Filter Logic: Strict Ownership
+                                // IF the word started before this batch's official start, it belongs to previous batch (which had it in its tail).
+                                // IF the word starts after this batch's official end, it belongs to next batch (which has it in its lead-in).
+                                
+                                // Special case: First batch owns everything from 0. Last batch owns until end.
+                                const belongsToBatch = 
+                                    (globalStart >= batchStartTime || batchStartTime === 0) &&
+                                    (globalStart < batchEndTime || isLast);
+
+                                if (belongsToBatch) {
+                                    // Update timestamp in object
+                                    c.timestamp[0] = globalStart;
+                                    c.timestamp[1] = globalEnd;
+                                    allChunks.push(c);
+                                }
+                            }
+                        });
+                    }
+                    
+                    // Report Progress
+                    const progressPercent = Math.min(100, ((offsetSamples + BATCH_SAMPLES) / audio.length) * 100);
+                    self.postMessage({ 
+                         type: 'progress', 
+                         data: { 
+                             status: 'transcribing', 
+                             progress: progressPercent,
+                             partialParams: { chunks: allChunks } 
+                         } 
+                    });
+                    
+                    // Move forward by exactly one BATCH size
+                    offsetSamples += BATCH_SAMPLES;
+                }
+                
+                self.postMessage({ type: 'complete', data: { chunks: allChunks } });
+                
+            } catch (err) {
+                self.postMessage({ type: 'error', data: err.message });
+            }
+        }
+    };
+    `;
+
+        // -------------------------------------------------------------------------
+        // MAIN THREAD CODE
+        // -------------------------------------------------------------------------
+
+        // UI Elements
+        const fileInput = document.getElementById('file-input');
+        const transcribeBtn = document.getElementById('transcribe-btn');
+        const mediaPane = document.getElementById('media-pane');
+        const placeholder = document.getElementById('placeholder');
+        const transcriptContent = document.getElementById('transcript-content');
+        const statusText = document.getElementById('status-text');
+        const progressText = document.getElementById('progress-text');
+        const spinner = document.getElementById('spinner');
+        const progressContainer = document.getElementById('progress-container');
+        const progressBar = document.getElementById('progress-bar');
+
+        let mediaElement = null;
+        let worker = null;
+        let transcriptData = null;
+
+        // Initialize Worker
+        function initWorker() {
+            const blob = new Blob([workerScript], { type: 'application/javascript' });
+            worker = new Worker(URL.createObjectURL(blob), { type: 'module' });
+
+            worker.onmessage = (e) => {
+                const { type, data } = e.data;
+
+                if (type === 'status') {
+                    statusText.textContent = data;
+                    spinner.style.display = (data.includes('Loading') || data.includes('Transcribing')) ? 'block' : 'none';
+                }
+
+                if (type === 'progress') {
+                    // Model download progress
+                    if (data.file) {
+                        progressContainer.style.display = 'block';
+                        progressBar.classList.remove('indeterminate');
+                        progressBar.style.width = Math.round(data.progress) + '%';
+                        statusText.textContent = `Downloading model... ${Math.round(data.progress)}%`;
+                    }
+                    // Transcription progress (Incremental)
+                    if (data.status === 'transcribing') {
+                        progressContainer.style.display = 'block';
+                        progressBar.classList.remove('indeterminate'); // We have percents again!
+                        progressBar.style.width = data.progress + '%';
+                        statusText.textContent = `Transcribing... ${Math.round(data.progress)}%`;
+
+                        // Live rendering
+                        if (data.partialParams) {
+                            renderTranscript(data.partialParams);
+                        }
+                    }
+                }
+
+                if (type === 'ready') {
+                    statusText.textContent = 'Model loaded. Ready to transcribe.';
+                    spinner.style.display = 'none';
+                    progressContainer.style.display = 'none';
+                    transcribeBtn.disabled = !mediaElement;
+                }
+
+                if (type === 'complete') {
+                    statusText.textContent = 'Transcription complete.';
+                    spinner.style.display = 'none';
+
+                    // Finish bar
+                    progressBar.classList.remove('indeterminate');
+                    progressBar.style.width = '100%';
+                    setTimeout(() => {
+                        progressContainer.style.display = 'none';
+                        progressBar.style.width = '0%';
+                    }, 1000);
+
+                    console.log('Result:', data);
+                    renderTranscript(data);
+                }
+
+                if (type === 'error') {
+                    statusText.textContent = 'Error: ' + data;
+                    statusText.style.color = '#ef4444';
+                    spinner.style.display = 'none';
+                    progressContainer.style.display = 'none';
+                }
+            };
+            worker.postMessage({ type: 'init' });
+        }
+
+        initWorker();
+
+        // Audio Decoding Helper
+        async function readAudio(url) {
+            const response = await fetch(url);
+            const arrayBuffer = await response.arrayBuffer();
+
+            // Decode audio
+            const audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
+            const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+
+            // It should be 16000 due to context option, but double check
+            let audioData = audioBuffer.getChannelData(0);
+
+            if (audioBuffer.sampleRate !== 16000) {
+                console.log("Resampling from " + audioBuffer.sampleRate + " to 16000");
+                // Resample using OfflineAudioContext
+                const offlineCtx = new OfflineAudioContext(1, audioBuffer.duration * 16000, 16000);
+                const source = offlineCtx.createBufferSource();
+                source.buffer = audioBuffer;
+                source.connect(offlineCtx.destination);
+                source.start();
+                const resampled = await offlineCtx.startRendering();
+                audioData = resampled.getChannelData(0);
+            }
+
+            // Critical cleanup
+            audioContext.close();
+
+            return audioData;
+        }
+
+        // File Handling
+        fileInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (!file) {
+                console.log("No file selected.");
+                return;
+            }
+            console.log("File selected:", file.name, file.type);
+            document.getElementById('filename-display').textContent = file.name;
+
+            if (mediaElement) mediaElement.remove();
+            placeholder.style.display = 'none';
+            transcriptContent.innerHTML = '<div style="padding:1rem;color:#64748b;">File loaded. Click "Start Transcription".</div>';
+
+            const url = URL.createObjectURL(file);
+            const isAudio = file.type.startsWith('audio');
+            // Prefer video element for broader support
+            const useVideo = !isAudio;
+
+            mediaElement = document.createElement(useVideo ? 'video' : 'audio');
+            mediaElement.src = url;
+            mediaElement.controls = false; // Hide native controls
+            mediaElement.style.width = '100%';
+            mediaElement.style.outline = 'none';
+
+            mediaPane.appendChild(mediaElement);
+
+            // Show and reset Custom Controls
+            document.getElementById('custom-controls').style.display = 'flex';
+            const playBtn = document.getElementById('play-btn');
+            const seekSlider = document.getElementById('seek-slider');
+            const timeDisplay = document.getElementById('time-display');
+
+            let isDragging = false;
+
+            // Play/Pause
+            playBtn.onclick = () => {
+                if (mediaElement.paused) mediaElement.play();
+                else mediaElement.pause();
+            };
+
+            // Icon toggle
+            mediaElement.onplay = () => playBtn.innerHTML = '<svg viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>';
+            mediaElement.onpause = () => playBtn.innerHTML = '<svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>';
+
+            // Initialization on metadata load
+            mediaElement.onloadedmetadata = () => {
+                timeDisplay.textContent = `00:00 / ${formatTime(mediaElement.duration)}`;
+                seekSlider.value = 0;
+            };
+
+            // Seek Interaction
+            seekSlider.onmousedown = () => { isDragging = true; };
+            seekSlider.onmouseup = () => { isDragging = false; };
+
+            seekSlider.oninput = (e) => {
+                isDragging = true;
+                const time = (e.target.value / 100) * mediaElement.duration;
+                if (!Number.isNaN(time)) {
+                    mediaElement.currentTime = time;
+                    timeDisplay.textContent = `${formatTime(time)} / ${formatTime(mediaElement.duration)}`;
+                }
+            };
+
+            seekSlider.onchange = () => { isDragging = false; };
+
+            statusText.textContent = `Loaded: ${file.name}`;
+            transcribeBtn.disabled = false;
+
+            mediaElement.addEventListener('timeupdate', () => {
+                if (!mediaElement) return;
+
+                // Sync Slider only if not dragging
+                if (!isDragging && !Number.isNaN(mediaElement.duration)) {
+                    const val = (mediaElement.currentTime / mediaElement.duration) * 100;
+                    seekSlider.value = val;
+                    timeDisplay.textContent = `${formatTime(mediaElement.currentTime)} / ${formatTime(mediaElement.duration)}`;
+                }
+
+                handleTranscriptSync();
+            });
+        });
+
+        // Transcription Trigger
+        transcribeBtn.addEventListener('click', async () => {
+            if (!mediaElement) return;
+            transcribeBtn.disabled = true;
+            transcriptContent.innerHTML = '<div style="padding:1rem;color:#64748b;">Processing Audio (Decoding)...</div>';
+            statusText.textContent = "Decoding audio...";
+            spinner.style.display = 'block';
+
+            // Show progress container (empty initially)
+            progressContainer.style.display = 'block';
+            progressBar.classList.remove('indeterminate');
+            progressBar.style.width = '0%';
+
+            try {
+                // Decode in main thread
+                const audioData = await readAudio(mediaElement.src);
+
+                transcriptContent.innerHTML = '<div style="padding:1rem;color:#64748b;">Transcribing... (This may take a minute)</div>';
+                statusText.textContent = "Transcribing...";
+
+                // Pass float array to worker
+                worker.postMessage({ type: 'transcribe', data: { audio: audioData } });
+            } catch (err) {
+                console.error(err);
+                statusText.textContent = "Error decoding audio: " + err.message;
+                statusText.style.color = '#ef4444';
+                spinner.style.display = 'none';
+            }
+        });
+
+        // Transcript Rendering
+        function renderTranscript(result) {
+            transcriptData = result;
+
+            // Handle empty result
+            if (!result.chunks || result.chunks.length === 0) {
+                if (transcriptContent.children.length === 0) {
+                    transcriptContent.innerHTML = '<div style="padding:1rem;">No speech detected.</div>';
+                }
+                return;
+            }
+
+            // Check if we need to clear (e.g., new file loaded)
+            // If the first new chunk timestamp is before the last existing chunk, we likely reset.
+            // Simplified check: if result has fewer chunks than DOM, reset.
+            const existingSegments = transcriptContent.querySelectorAll('.segment');
+            if (existingSegments.length > result.chunks.length) {
+                transcriptContent.innerHTML = '';
+            }
+
+            // If completely empty (and we have chunks), clear the placeholder text
+            if (transcriptContent.children.length > 0 && !transcriptContent.children[0].classList.contains('segment')) {
+                transcriptContent.innerHTML = '';
+            }
+
+            // Append only new segments
+            const startIndex = transcriptContent.querySelectorAll('.segment').length;
+
+            for (let i = startIndex; i < result.chunks.length; i++) {
+                const chunk = result.chunks[i];
+                const index = i;
+
+                const div = document.createElement('div');
+                div.className = 'segment';
+                div.dataset.index = index;
+
+                // Format time: "00:00"
+                const start = chunk.timestamp[0];
+                const end = chunk.timestamp[1];
+
+                div.dataset.start = start;
+                div.dataset.end = end;
+
+                const timeStr = formatTime(start);
+
+                div.innerHTML = `
+                <div class="timestamp">${timeStr}</div>
+                <div class="text">${chunk.text}</div>
+            `;
+
+                // Click to seek (with debounce for double-click)
+                let clickTimeout = null;
+
+                div.addEventListener('click', () => {
+                    // Prevent seek if user is selecting text (drag)
+                    if (window.getSelection().toString().length > 0) return;
+
+                    if (clickTimeout) clearTimeout(clickTimeout);
+
+                    clickTimeout = setTimeout(() => {
+                        // Re-check selection
+                        if (window.getSelection().toString().length > 0) return;
+
+                        userScrolled = false;
+                        resumeBtn.style.display = 'none';
+                        if (mediaElement) {
+                            mediaElement.currentTime = start;
+                            mediaElement.play();
+                        }
+                        clickTimeout = null;
+                    }, 250);
+                });
+
+                // Cancel seek on double click
+                div.addEventListener('dblclick', () => {
+                    if (clickTimeout) {
+                        clearTimeout(clickTimeout);
+                        clickTimeout = null;
+                    }
+                });
+
+                transcriptContent.appendChild(div);
+            }
+        }
+
+        function formatTime(seconds) {
+            if (seconds === null || seconds === undefined) return "--:--";
+            const m = Math.floor(seconds / 60);
+            const s = Math.floor(seconds % 60);
+            return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+        }
+
+        // Sync Logic
+        let userScrolled = false;
+        let lastAutoScroll = 0;
+        const resumeBtn = document.getElementById('resume-btn');
+
+        transcriptContent.addEventListener('scroll', () => {
+            // Ignore scroll events triggered by our own smooth scrolling (approx 800ms)
+            if (Date.now() - lastAutoScroll < 800) return;
+            // If user scrolls manually, show resume button
+            userScrolled = true;
+            resumeBtn.style.display = 'block';
+        });
+
+        resumeBtn.addEventListener('click', () => {
+            userScrolled = false;
+            resumeBtn.style.display = 'none';
+            // Snap to active
+            const active = document.querySelector('.segment.active');
+            if (active) {
+                active.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                lastAutoScroll = Date.now();
+            }
+        });
+
+        function handleTranscriptSync() {
+            if (!mediaElement || !transcriptData) return;
+
+            const t = mediaElement.currentTime;
+            const segments = document.querySelectorAll('.segment');
+
+            segments.forEach(seg => {
+                const start = parseFloat(seg.dataset.start);
+                const end = parseFloat(seg.dataset.end);
+
+                if (t >= start && t < end) {
+                    if (!seg.classList.contains('active')) {
+                        document.querySelectorAll('.segment.active').forEach(a => a.classList.remove('active'));
+                        seg.classList.add('active');
+
+                        if (!userScrolled) {
+                            seg.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                            lastAutoScroll = Date.now();
+                        }
+                    }
+                }
+            });
+        }
+
+        // Dictionary Feature
+        const dictionaryTooltip = document.getElementById('dictionary-tooltip');
+        let dictionaryTimeout = null;
+
+        transcriptContent.addEventListener('dblclick', async (e) => {
+            const selection = window.getSelection();
+            const word = selection.toString().trim();
+
+            if (!word || word.includes(' ')) return; // Only lookup single words
+
+            // Clear existing timeout
+            if (dictionaryTimeout) clearTimeout(dictionaryTimeout);
+
+            // Initial UI State
+            const rect = selection.getRangeAt(0).getBoundingClientRect();
+            dictionaryTooltip.style.display = 'block';
+            dictionaryTooltip.style.top = `${rect.bottom + 10}px`;
+            dictionaryTooltip.style.left = `${Math.min(rect.left, window.innerWidth - 320)}px`;
+            dictionaryTooltip.innerHTML = `<div style="color:#94a3b8">Searching for "${word}"...</div>`;
+
+            // Set timeout to close after 10 seconds
+            dictionaryTimeout = setTimeout(() => {
+                dictionaryTooltip.style.display = 'none';
+            }, 10000);
+
+            try {
+                const res = await fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${word}`);
+                if (!res.ok) throw new Error('Not found');
+
+                const data = await res.json();
+                const entry = data[0];
+                const defs = entry.meanings[0].definitions.slice(0, 3).map(d => `<li>${d.definition}</li>`).join('');
+                const phonetic = entry.phonetic || (entry.phonetics.find(p => p.text) ? entry.phonetics.find(p => p.text).text : '');
+
+                dictionaryTooltip.innerHTML = `
+                    <h4>${entry.word}</h4>
+                    ${phonetic ? `<span class="phonetic">${phonetic}</span>` : ''}
+                    <ul>${defs}</ul>
+                `;
+            } catch (err) {
+                dictionaryTooltip.innerHTML = `<div style="color:#ef4444">Definition not found.</div>`;
+            }
+        });
+
+        // Close tooltip on click elsewhere
+        document.addEventListener('click', (e) => {
+            if (dictionaryTooltip.style.display === 'block') {
+                // If clicking outside tooltip and NOT double clicking text
+                if (!dictionaryTooltip.contains(e.target)) {
+                    dictionaryTooltip.style.display = 'none';
+                    if (dictionaryTimeout) clearTimeout(dictionaryTimeout);
+                }
+            }
+        });
+
+        // Keyboard Shortcuts
+        document.addEventListener('keydown', (e) => {
+            if (!mediaElement) return;
+
+            // Ignore if typing in an input (conceptually, though only file input exists)
+            const tag = e.target.tagName.toLowerCase();
+            if (tag === 'input' || tag === 'textarea') return;
+
+            switch (e.code) {
+                case 'Space':
+                    e.preventDefault(); // Prevent scrolling
+                    if (mediaElement.paused) mediaElement.play();
+                    else mediaElement.pause();
+                    break;
+
+                case 'ArrowLeft':
+                    e.preventDefault(); // Prevent scrolling
+                    mediaElement.currentTime = Math.max(0, mediaElement.currentTime - 5);
+                    break;
+
+                case 'ArrowRight':
+                    e.preventDefault();
+                    mediaElement.currentTime = Math.min(mediaElement.duration, mediaElement.currentTime + 5);
+                    break;
+            }
+        });
+
+    </script>
+
+</body>
+
+</html>
