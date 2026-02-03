@@ -203,6 +203,55 @@
             color: #94a3b8;
             text-transform: uppercase;
             letter-spacing: 0.05em;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .pane-actions {
+            display: flex;
+            gap: 1rem;
+            align-items: center;
+            text-transform: none;
+            letter-spacing: normal;
+        }
+
+        .toggle-container {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.75rem;
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .toggle-container input {
+            cursor: pointer;
+        }
+
+        .copy-btn {
+            background: transparent;
+            border: 1px solid var(--border);
+            color: var(--accent);
+            padding: 0.25rem 0.75rem;
+            border-radius: 0.25rem;
+            font-size: 0.75rem;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+        }
+
+        .copy-btn:hover {
+            background: rgba(56, 189, 248, 0.1);
+            border-color: var(--accent);
+        }
+
+        .copy-btn svg {
+            width: 12px;
+            height: 12px;
+            fill: currentColor;
         }
 
         #transcript-content {
@@ -433,7 +482,22 @@
         </div>
 
         <div id="transcript-pane" style="position: relative;">
-            <div class="pane-header">Transcript</div>
+            <div class="pane-header">
+                <span>Transcript</span>
+                <div class="pane-actions">
+                    <label class="toggle-container">
+                        <input type="checkbox" id="include-timestamps" checked>
+                        Include Timestamps
+                    </label>
+                    <button id="copy-btn" class="copy-btn">
+                        <svg viewBox="0 0 24 24">
+                            <path
+                                d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z" />
+                        </svg>
+                        Copy
+                    </button>
+                </div>
+            </div>
             <div id="transcript-content">
                 <!-- Segments go here -->
                 <div style="padding: 1rem; color: #64748b; font-style: italic;">
@@ -1045,6 +1109,42 @@
                     e.preventDefault();
                     mediaElement.currentTime = Math.min(mediaElement.duration, mediaElement.currentTime + 5);
                     break;
+            }
+        });
+
+        // Copy Feature
+        const copyBtn = document.getElementById('copy-btn');
+        const includeTimestampsCheckbox = document.getElementById('include-timestamps');
+
+        copyBtn.addEventListener('click', async () => {
+            if (!transcriptData || !transcriptData.chunks || transcriptData.chunks.length === 0) {
+                statusText.textContent = "No transcript to copy.";
+                return;
+            }
+
+            const includeTimestamps = includeTimestampsCheckbox.checked;
+            let text = "";
+
+            transcriptData.chunks.forEach(chunk => {
+                if (includeTimestamps) {
+                    text += `[${formatTime(chunk.timestamp[0])}] ${chunk.text}\n`;
+                } else {
+                    text += `${chunk.text} `;
+                }
+            });
+
+            try {
+                await navigator.clipboard.writeText(text.trim());
+                const originalContent = copyBtn.innerHTML;
+                copyBtn.innerHTML = 'Copied!';
+                copyBtn.classList.add('active'); // Reuse existing style indicator or just change text
+
+                setTimeout(() => {
+                    copyBtn.innerHTML = originalContent;
+                }, 2000);
+            } catch (err) {
+                console.error('Failed to copy: ', err);
+                statusText.textContent = "Copy failed.";
             }
         });
 
